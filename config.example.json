@@ -24,6 +24,7 @@
   "pexels_api_key": "",
   "tts_engine": "coqui",
   "kokoro_api_url": "http://localhost:8880",
+  "transition_duration": 0.5,
   "font": "bold_font.ttf",
   "imagemagick_path": "Path to magick.exe or on linux/macOS just /usr/bin/convert",
   "script_sentence_length": 4

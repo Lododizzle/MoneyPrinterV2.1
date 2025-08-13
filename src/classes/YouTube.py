@@ -460,8 +460,18 @@ class YouTube:
 
             clips.append(clip.set_fps(30))
 
-        # --- Video and Audio Concatenation ---
-        final_clip = concatenate_videoclips(clips).set_duration(max_duration)
+        # --- Video and Audio Concatenation with Transitions ---
+        transition_duration = get_transition_duration()
+
+        # Set the start time for each clip and apply crossfade
+        final_clips = [clips[0]]
+        for i, clip in enumerate(clips[1:]):
+            previous_clip = final_clips[i]
+            clip = clip.set_start(previous_clip.end - transition_duration)
+            clip = clip.crossfadein(transition_duration)
+            final_clips.append(clip)
+
+        final_clip = CompositeVideoClip(final_clips).set_duration(max_duration)
         final_clip = final_clip.set_fps(30)
         
         # --- Audio Composition ---

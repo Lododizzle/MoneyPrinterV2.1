@@ -243,6 +243,16 @@ def get_kokoro_api_url() -> str:
     """
     with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
         return json.load(file).get("kokoro_api_url", "http://localhost:8880")
+
+def get_transition_duration() -> float:
+    """
+    Gets the transition duration from the config file.
+
+    Returns:
+        float: The transition duration in seconds.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("transition_duration", 0.5)
     
 def equalize_subtitles(srt_path: str, max_chars: int = 10) -> None:
     """
