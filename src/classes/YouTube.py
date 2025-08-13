@@ -163,47 +163,56 @@ class YouTube:
 
         return completion
 
-    def generate_script(self) -> str:
+    def generate_script(self) -> dict:
         """
-        Generate a script for a video, depending on the subject of the video, the number of paragraphs, and the AI model.
+        Generates a script for a video, including the voiceover text and suggested sound effects.
 
         Returns:
-            script (str): The script of the video.
+            dict: A dictionary containing the 'script' text and a list of 'sfx' cues.
         """
         sentence_length = get_script_sentence_length()
         prompt = f"""
-        Generate a script for a short, fast-paced vertical video, depending on the subject. The script must be in {self.language}.
+        Generate a script for a short, fast-paced vertical video on the given subject. The script must be in {self.language}.
+        The response MUST be a JSON object with two keys: "script" and "sfx".
 
-        The script needs to be highly engaging and optimized for viewer retention. Follow this structure:
-        1.  **Hook (First Sentence):** Start with a surprising, controversial, or intriguing question or statement. This must grab the viewer's attention immediately.
-        2.  **Main Content ({sentence_length - 2} sentences):** Explain the core topic. Use a mix of short, punchy sentences and slightly longer ones to create a good rhythm. Keep it concise and easy to understand.
-        3.  **Call to Action (Last Sentence):** End with a clear call to action, like "Follow for more!" or "What do you think? Comment below!".
+        1.  "script": A string containing the voiceover script. It should follow this structure:
+            - **Hook (First Sentence):** An intriguing question or statement.
+            - **Main Content ({sentence_length - 2} sentences):** Explain the core topic with a mix of short and long sentences.
+            - **Call to Action (Last Sentence):** A clear call to action.
+            - **Constraints:** Total length must be exactly {sentence_length} sentences. Tone must be energetic and confident.
 
-        **Key constraints:**
-        - **Total Length:** Exactly {sentence_length} sentences.
-        - **Formatting:** NO markdown, NO titles, NO "VOICEOVER:" or similar labels. Return only the raw script text.
-        - **Tone:** Energetic, confident, and direct.
-        - **Content:** Stay focused on the subject. Do not mention this prompt or the script's structure.
+        2.  "sfx": An array of strings, with one entry for each sentence in the script. Each string should be a concise, 1-3 word description of a suggested sound effect (e.g., "mouse click", "rocket whoosh", "camera shutter"). If no sound effect is appropriate for a sentence, the value should be `null`.
+
+        Example response format:
+        {{
+          "script": "Did you know you can do this? It's super easy to set up. Let me know what you think!",
+          "sfx": ["question_sfx", "typing_sfx", null]
+        }}
 
         **Subject:** {self.subject}
         """
         completion = self.generate_response(prompt)
+        
+        try:
+            # Clean the response by removing markdown and extracting the JSON object
+            json_match = re.search(r'\{.*\}', completion, re.DOTALL)
+            if not json_match:
+                raise json.JSONDecodeError("No JSON object found in response.", completion, 0)
 
-        # Apply regex to remove *
-        completion = re.sub(r"\*", "", completion)
-        
-        if not completion:
-            error("The generated script is empty.")
-            return
-        
-        if len(completion) > 5000:
-            if get_verbose():
-                warning("Generated Script is too long. Retrying...")
-            self.generate_script()
-        
-        self.script = completion
-    
-        return completion
+            json_str = json_match.group(0)
+            script_data = json.loads(json_str)
+
+            if 'script' not in script_data or 'sfx' not in script_data:
+                raise ValueError("JSON response is missing 'script' or 'sfx' key.")
+
+            # Store the script text for other methods to use
+            self.script = script_data['script']
+            return script_data
+
+        except (json.JSONDecodeError, ValueError) as e:
+            error(f"Failed to parse script from LLM response: {e}. Retrying...")
+            # Fallback to generating script without sfx if parsing fails
+            return self.generate_script()
 
     def generate_metadata(self) -> dict:
         """
@@ -509,10 +518,31 @@ class YouTube:
         else:
             random_song_clip = random_song_clip.fx(afx.volumex, 0.1)
 
-        comp_audio = CompositeAudioClip([
-            tts_clip.set_fps(44100),
-            random_song_clip
-        ])
+        audio_clips = [tts_clip.set_fps(44100), random_song_clip]
+
+        # Add sound effects if enabled
+        sfx_config = get_sfx_config()
+        if sfx_config["enabled"]:
+            sfx_cues = self.script_data.get("sfx", [])
+            # Ensure we have the same number of cues as timestamps
+            if len(sfx_cues) == len(timestamps):
+                for i, sfx_cue in enumerate(sfx_cues):
+                    if sfx_cue:
+                        # Try to find the sound effect file (e.g., "rocket_whoosh.mp3")
+                        sfx_file_name = f"{sfx_cue.replace(' ', '_')}.mp3"
+                        sfx_path = os.path.join(sfx_config["path"], sfx_file_name)
+                        if os.path.exists(sfx_path):
+                            try:
+                                sfx_clip = AudioFileClip(sfx_path)
+                                sfx_clip = sfx_clip.set_start(timestamps[i][0]) # Set start time to match sentence
+                                audio_clips.append(sfx_clip)
+                                info(f"Added sound effect: {sfx_file_name}")
+                            except Exception as e:
+                                error(f"Failed to process sound effect file {sfx_path}: {e}")
+                        else:
+                            warning(f"Sound effect file not found: {sfx_path}")
+
+        comp_audio = CompositeAudioClip(audio_clips)
         final_clip.audio = comp_audio.set_duration(max_duration)
 
         # --- Subtitles ---
@@ -540,7 +570,8 @@ class YouTube:
         self.generate_topic()
 
         # Generate the Script
-        self.generate_script()
+        script_data = self.generate_script()
+        self.script_data = script_data
 
         # Generate the Metadata
         self.generate_metadata()

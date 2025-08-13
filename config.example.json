@@ -28,6 +28,8 @@
   "audio_ducking_enabled": true,
   "audio_ducking_volume_speech": 0.1,
   "audio_ducking_volume_silence": 0.3,
+  "sound_effects_enabled": true,
+  "sound_effects_path": "sfx",
   "font": "bold_font.ttf",
   "imagemagick_path": "Path to magick.exe or on linux/macOS just /usr/bin/convert",
   "script_sentence_length": 4

@@ -268,6 +268,20 @@ def get_audio_ducking_config() -> dict:
             "speech_volume": config.get("audio_ducking_volume_speech", 0.1),
             "silence_volume": config.get("audio_ducking_volume_silence", 0.3)
         }
+
+def get_sfx_config() -> dict:
+    """
+    Gets the sound effects configuration from the config file.
+
+    Returns:
+        dict: A dictionary with sound effects settings.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        config = json.load(file)
+        return {
+            "enabled": config.get("sound_effects_enabled", True),
+            "path": config.get("sound_effects_path", "sfx")
+        }
     
 def equalize_subtitles(srt_path: str, max_chars: int = 10) -> None:
     """
