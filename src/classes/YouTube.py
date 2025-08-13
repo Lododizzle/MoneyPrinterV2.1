@@ -476,8 +476,39 @@ class YouTube:
         
         # --- Audio Composition ---
         random_song = choose_random_song()
-        random_song_clip = AudioFileClip(random_song).fx(afx.volumex, 0.1)
-        
+        random_song_clip = AudioFileClip(random_song)
+        subtitles_path = self.generate_subtitles(self.tts_path)
+
+        # Apply audio ducking
+        ducking_config = get_audio_ducking_config()
+        if ducking_config["enabled"]:
+            try:
+                with open(subtitles_path, 'r') as f:
+                    lines = f.readlines()
+
+                timestamps = []
+                for i, line in enumerate(lines):
+                    if "-->" in line:
+                        start_str, end_str = line.split(" --> ")
+                        def srt_time_to_seconds(s):
+                            h, m, s_ms = s.split(':')
+                            s, ms = s_ms.split(',')
+                            return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
+                        timestamps.append((srt_time_to_seconds(start_str.strip()), srt_time_to_seconds(end_str.strip())))
+
+                def volume_filter(t):
+                    for start, end in timestamps:
+                        if start <= t <= end:
+                            return ducking_config["speech_volume"]
+                    return ducking_config["silence_volume"]
+
+                random_song_clip = random_song_clip.fx(afx.volumex, volume_filter)
+            except Exception as e:
+                error(f"Failed to apply audio ducking: {e}. Using static volume.")
+                random_song_clip = random_song_clip.fx(afx.volumex, 0.1)
+        else:
+            random_song_clip = random_song_clip.fx(afx.volumex, 0.1)
+
         comp_audio = CompositeAudioClip([
             tts_clip.set_fps(44100),
             random_song_clip
@@ -485,7 +516,6 @@ class YouTube:
         final_clip.audio = comp_audio.set_duration(max_duration)
 
         # --- Subtitles ---
-        subtitles_path = self.generate_subtitles(self.tts_path)
         equalize_subtitles(subtitles_path, 10)
         subtitles = SubtitlesClip(subtitles_path, generator).set_pos(("center", "center"))
 

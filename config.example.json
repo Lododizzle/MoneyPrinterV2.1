@@ -25,6 +25,9 @@
   "tts_engine": "coqui",
   "kokoro_api_url": "http://localhost:8880",
   "transition_duration": 0.5,
+  "audio_ducking_enabled": true,
+  "audio_ducking_volume_speech": 0.1,
+  "audio_ducking_volume_silence": 0.3,
   "font": "bold_font.ttf",
   "imagemagick_path": "Path to magick.exe or on linux/macOS just /usr/bin/convert",
   "script_sentence_length": 4

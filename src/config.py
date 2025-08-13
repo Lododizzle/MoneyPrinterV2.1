@@ -253,6 +253,21 @@ def get_transition_duration() -> float:
     """
     with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
         return json.load(file).get("transition_duration", 0.5)
+
+def get_audio_ducking_config() -> dict:
+    """
+    Gets the audio ducking configuration from the config file.
+
+    Returns:
+        dict: A dictionary with audio ducking settings.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        config = json.load(file)
+        return {
+            "enabled": config.get("audio_ducking_enabled", True),
+            "speech_volume": config.get("audio_ducking_volume_speech", 0.1),
+            "silence_volume": config.get("audio_ducking_volume_silence", 0.3)
+        }
     
 def equalize_subtitles(srt_path: str, max_chars: int = 10) -> None:
     """
