@@ -172,26 +172,20 @@ class YouTube:
         """
         sentence_length = get_script_sentence_length()
         prompt = f"""
-        Generate a script for a video in {sentence_length} sentences, depending on the subject of the video.
+        Generate a script for a short, fast-paced vertical video, depending on the subject. The script must be in {self.language}.
 
-        The script is to be returned as a string with the specified number of paragraphs.
+        The script needs to be highly engaging and optimized for viewer retention. Follow this structure:
+        1.  **Hook (First Sentence):** Start with a surprising, controversial, or intriguing question or statement. This must grab the viewer's attention immediately.
+        2.  **Main Content ({sentence_length - 2} sentences):** Explain the core topic. Use a mix of short, punchy sentences and slightly longer ones to create a good rhythm. Keep it concise and easy to understand.
+        3.  **Call to Action (Last Sentence):** End with a clear call to action, like "Follow for more!" or "What do you think? Comment below!".
 
-        Here is an example of a string:
-        "This is an example string."
+        **Key constraints:**
+        - **Total Length:** Exactly {sentence_length} sentences.
+        - **Formatting:** NO markdown, NO titles, NO "VOICEOVER:" or similar labels. Return only the raw script text.
+        - **Tone:** Energetic, confident, and direct.
+        - **Content:** Stay focused on the subject. Do not mention this prompt or the script's structure.
 
-        Do not under any circumstance reference this prompt in your response.
-
-        Get straight to the point, don't start with unnecessary things like, "welcome to this video".
-
-        Obviously, the script should be related to the subject of the video.
-        
-        YOU MUST NOT EXCEED THE {sentence_length} SENTENCES LIMIT. MAKE SURE THE {sentence_length} SENTENCES ARE SHORT.
-        YOU MUST NOT INCLUDE ANY TYPE OF MARKDOWN OR FORMATTING IN THE SCRIPT, NEVER USE A TITLE.
-        YOU MUST WRITE THE SCRIPT IN THE LANGUAGE SPECIFIED IN [LANGUAGE].
-        ONLY RETURN THE RAW CONTENT OF THE SCRIPT. DO NOT INCLUDE "VOICEOVER", "NARRATOR" OR SIMILAR INDICATORS OF WHAT SHOULD BE SPOKEN AT THE BEGINNING OF EACH PARAGRAPH OR LINE. YOU MUST NOT MENTION THE PROMPT, OR ANYTHING ABOUT THE SCRIPT ITSELF. ALSO, NEVER TALK ABOUT THE AMOUNT OF PARAGRAPHS OR LINES. JUST WRITE THE SCRIPT
-        
-        Subject: {self.subject}
-        Language: {self.language}
+        **Subject:** {self.subject}
         """
         completion = self.generate_response(prompt)
 
