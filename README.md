@@ -61,8 +61,8 @@ Once the prerequisites are installed, you can set up the MoneyPrinterV2 applicat
 
 Open your terminal or command prompt and run the following command:
 ```bash
-git clone https://github.com/FujiwaraChoki/MoneyPrinterV2.git
-cd MoneyPrinterV2
+git clone https://github.com/Lododizzle/MoneyPrinterV2.1.git
+cd MoneyPrinterV2.1
 ```
 
 **2. Create and Activate Virtual Environment**
@@ -139,6 +139,58 @@ The `config.json` file controls all major features of the application.
 | `sound_effects_enabled`         | Set to `true` to enable automatically layered sound effects.                                                                                                          |
 | `sound_effects_path`            | The local folder path where you store your `.mp3` sound effect files (e.g., `"sfx"`).                                                                                    |
 | `imagemagick_path`              | **Required on Windows.** The full path to your `magick.exe` file. On Linux, this can usually be left as is.                                                              |
+
+## Troubleshooting
+
+Here are solutions to some common issues you might encounter during setup.
+
+### `ModuleNotFoundError: No module named '...'`
+
+This error usually means one of two things:
+1.  Your virtual environment is not activated.
+2.  The Python dependencies were not installed correctly.
+
+**Solution:**
+
+1.  **Activate the Virtual Environment:**
+    *   On Windows: `.\venv\Scripts\activate`
+    *   On Linux: `source venv/bin/activate`
+
+2.  **Re-install Dependencies:**
+    Once the virtual environment is active, run the installation command again:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+### `pip install` Fails
+
+If the `pip install -r requirements.txt` command fails for a specific package, it's often due to missing system-level dependencies.
+
+**Solution:**
+
+*   **On Windows:** The most common failure is for the `TTS` package. Ensure you have installed the **Microsoft Visual C++ Build Tools** as mentioned in the prerequisites.
+*   **On Linux:** Failures are less common but can be related to missing build essentials. You can install them with: `sudo apt install build-essential`.
+*   **General Fix:** Try upgrading `pip` first, then retry the installation:
+    ```bash
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+
+
+### CUDA / GPU Errors for Kokoro TTS
+
+If you are trying to run the Kokoro TTS Docker container with GPU support and encounter errors, it's almost always an issue with your NVIDIA driver setup.
+
+**Solution:**
+
+1.  **Check NVIDIA Driver:** Ensure you have the latest NVIDIA drivers installed for your GPU. You can check your driver status by running `nvidia-smi` in your terminal.
+
+2.  **Verify NVIDIA Container Toolkit:** Docker requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) to be installed to allow containers to access the GPU. Make sure it is properly installed and configured on your system.
+
+3.  **Run as CPU:** If you cannot resolve the GPU issues, you can always run the CPU version of the Kokoro TTS container as a fallback:
+    ```bash
+    docker run -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    ```
 
 ## Usage
 
