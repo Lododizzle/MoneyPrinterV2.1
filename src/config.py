@@ -223,6 +223,26 @@ def get_pexels_api_key() -> str:
     """
     with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
         return json.load(file)["pexels_api_key"]
+
+def get_tts_engine() -> str:
+    """
+    Gets the TTS engine from the config file.
+
+    Returns:
+        str: The TTS engine name.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("tts_engine", "coqui")
+
+def get_kokoro_api_url() -> str:
+    """
+    Gets the Kokoro API URL from the config file.
+
+    Returns:
+        str: The Kokoro API URL.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("kokoro_api_url", "http://localhost:8880")
     
 def equalize_subtitles(srt_path: str, max_chars: int = 10) -> None:
     """
