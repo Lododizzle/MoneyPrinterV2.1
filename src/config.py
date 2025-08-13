@@ -213,6 +213,16 @@ def get_assemblyai_api_key() -> str:
     """
     with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
         return json.load(file)["assembly_ai_api_key"]
+
+def get_pexels_api_key() -> str:
+    """
+    Gets the Pexels API key from the config file.
+
+    Returns:
+        str: The Pexels API key.
+    """
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file)["pexels_api_key"]
     
 def equalize_subtitles(srt_path: str, max_chars: int = 10) -> None:
     """

@@ -78,7 +78,7 @@ class YouTube:
         self._niche: str = niche
         self._language: str = language
 
-        self.images = []
+        self.video_paths = []
 
         # Initialize the Firefox profile
         self.options: Options = Options()
@@ -228,53 +228,25 @@ class YouTube:
 
         return self.metadata
     
-    def generate_prompts(self) -> List[str]:
+    def _generate_video_search_terms(self) -> List[str]:
         """
-        Generates AI Image Prompts based on the provided Video Script.
-
-        Returns:
-            image_prompts (List[str]): Generated List of image prompts.
+        Generates video search terms based on the video script.
         """
-        # Check if using G4F for image generation
-        cached_accounts = get_accounts("youtube")
-        account_config = None
-        for account in cached_accounts:
-            if account["id"] == self._account_uuid:
-                account_config = account
-                break
-
-        # Calculate number of prompts based on script length
-        base_n_prompts = len(self.script) / 3
-
-        # If using G4F, limit to 25 prompts
-        if account_config and account_config.get("use_g4f", False):
-            n_prompts = min(base_n_prompts, 25)
-        else:
-            n_prompts = base_n_prompts
+        # Calculate number of search terms based on script length
+        n_search_terms = len(self.script.split('.')) - 1
 
         prompt = f"""
-        Generate {n_prompts} Image Prompts for AI Image Generation,
-        depending on the subject of a video.
-        Subject: {self.subject}
+        Generate {n_search_terms} concise search terms for a stock video API based on the following video script.
+        The search terms should be 2-4 words long, capturing the main action or mood of each sentence.
+        Return the terms as a JSON array of strings.
 
-        The image prompts are to be returned as
-        a JSON-Array of strings.
-
-        Each search term should consist of a full sentence,
-        always add the main subject of the video.
-
-        Be emotional and use interesting adjectives to make the
-        Image Prompt as detailed as possible.
-        
-        YOU MUST ONLY RETURN THE JSON-ARRAY OF STRINGS.
-        YOU MUST NOT RETURN ANYTHING ELSE. 
-        YOU MUST NOT RETURN THE SCRIPT.
-        
-        The search terms must be related to the subject of the video.
         Here is an example of a JSON-Array of strings:
-        ["image prompt 1", "image prompt 2", "image prompt 3"]
+        ["fast car driving", "mountain sunset", "person writing letter"]
 
-        For context, here is the full text:
+        YOU MUST ONLY RETURN THE JSON-ARRAY OF STRINGS.
+        YOU MUST NOT RETURN ANYTHING ELSE.
+
+        For context, here is the full script:
         {self.script}
         """
 
@@ -282,156 +254,84 @@ class YouTube:
             .replace("```json", "") \
             .replace("```", "")
 
-        image_prompts = []
-
-        if "image_prompts" in completion:
-            image_prompts = json.loads(completion)["image_prompts"]
-        else:
-            try:
-                image_prompts = json.loads(completion)
-                if get_verbose():
-                    info(f" => Generated Image Prompts: {image_prompts}")
-            except Exception:
-                if get_verbose():
-                    warning("GPT returned an unformatted response. Attempting to clean...")
-
-                # Get everything between [ and ], and turn it into a list
-                r = re.compile(r"\[.*\]")
-                image_prompts = r.findall(completion)
-                if len(image_prompts) == 0:
-                    if get_verbose():
-                        warning("Failed to generate Image Prompts. Retrying...")
-                    return self.generate_prompts()
-
-        # Limit prompts to max allowed amount
-        if account_config and account_config.get("use_g4f", False):
-            image_prompts = image_prompts[:25]
-        elif len(image_prompts) > n_prompts:
-            image_prompts = image_prompts[:int(n_prompts)]
-
-        self.image_prompts = image_prompts
-
-        success(f"Generated {len(image_prompts)} Image Prompts.")
-
-        return image_prompts
-
-    def generate_image_g4f(self, prompt: str) -> str:
-        """
-        Generates an AI Image using G4F with SDXL Turbo.
-
-        Args:
-            prompt (str): Reference for image generation
-
-        Returns:
-            path (str): The path to the generated image.
-        """
-        print(f"Generating Image using G4F: {prompt}")
-        
+        search_terms = []
         try:
-            from g4f.client import Client
-            
-            client = Client()
-            response = client.images.generate(
-                model="sdxl-turbo",
-                prompt=prompt,
-                response_format="url"
-            )
-            
-            if response and response.data and len(response.data) > 0:
-                # Download image from URL
-                image_url = response.data[0].url
-                image_response = requests.get(image_url)
-                
-                if image_response.status_code == 200:
-                    image_path = os.path.join(ROOT_DIR, ".mp", str(uuid4()) + ".png")
-                    
-                    with open(image_path, "wb") as image_file:
-                        image_file.write(image_response.content)
-                    
-                    if get_verbose():
-                        info(f" => Downloaded Image from {image_url} to \"{image_path}\"\n")
-                    
-                    self.images.append(image_path)
-                    return image_path
-                else:
-                    if get_verbose():
-                        warning(f"Failed to download image from URL: {image_url}")
-                    return None
+            search_terms = json.loads(completion)
+            if get_verbose():
+                info(f" => Generated Video Search Terms: {search_terms}")
+        except Exception:
+            if get_verbose():
+                warning("GPT returned an unformatted response. Attempting to clean...")
+            r = re.compile(r'\[.*\]')
+            match = r.search(completion)
+            if match:
+                try:
+                    search_terms = json.loads(match.group(0))
+                except Exception as e:
+                    error(f"Failed to parse search terms from cleaned response: {e}")
+                    return []
             else:
-                if get_verbose():
-                    warning("Failed to generate image using G4F - no data in response")
-                return None
-                
-        except Exception as e:
-            if get_verbose():
-                warning(f"Failed to generate image using G4F: {str(e)}")
-            return None
+                error("Failed to generate or parse video search terms.")
+                return []
 
-    def generate_image_cloudflare(self, prompt: str, worker_url: str) -> str:
+        self.video_search_terms = search_terms
+        success(f"Generated {len(search_terms)} video search terms.")
+        return search_terms
+
+    def _download_videos(self):
         """
-        Generates an AI Image using Cloudflare worker.
-
-        Args:
-            prompt (str): Reference for image generation
-            worker_url (str): The Cloudflare worker URL
-
-        Returns:
-            path (str): The path to the generated image.
+        Downloads videos from Pexels based on the search terms.
         """
-        print(f"Generating Image using Cloudflare: {prompt}")
+        info("Downloading videos from Pexels...")
+        self.video_paths = []
+        api_key = get_pexels_api_key()
 
-        url = f"{worker_url}?prompt={prompt}&model=sdxl"
-        
-        response = requests.get(url)
-        
-        if response.headers.get('content-type') == 'image/png':
-            image_path = os.path.join(ROOT_DIR, ".mp", str(uuid4()) + ".png")
-            
-            with open(image_path, "wb") as image_file:
-                image_file.write(response.content)
-            
-            if get_verbose():
-                info(f" => Wrote Image to \"{image_path}\"\n")
-            
-            self.images.append(image_path)
-            
-            return image_path
-        else:
-            if get_verbose():
-                warning("Failed to generate image. The response was not a PNG image.")
-            return None
+        if not api_key:
+            error("Pexels API key is missing from config.json. Cannot download videos.")
+            return
 
-    def generate_image(self, prompt: str) -> str:
-        """
-        Generates an AI Image based on the given prompt.
+        headers = {
+            "Authorization": api_key
+        }
 
-        Args:
-            prompt (str): Reference for image generation
+        for term in self.video_search_terms:
+            try:
+                url = f"https://api.pexels.com/videos/search?query={term}&per_page=1&orientation=portrait"
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()  # Raise an exception for bad status codes
 
-        Returns:
-            path (str): The path to the generated image.
-        """
-        # Get account config from cache
-        cached_accounts = get_accounts("youtube")
-        account_config = None
-        for account in cached_accounts:
-            if account["id"] == self._account_uuid:
-                account_config = account
-                break
+                data = response.json()
+                if not data.get("videos"):
+                    warning(f"No videos found for search term: '{term}'")
+                    continue
 
-        if not account_config:
-            error("Account configuration not found")
-            return None
+                video_url = None
+                # Find a suitable video file, prefer smaller resolution for faster processing
+                for video_file in sorted(data["videos"][0]["video_files"], key=lambda x: x['width']):
+                     if 'hd' in video_file['quality']:
+                        video_url = video_file['link']
+                        break
 
-        # Check if using G4F or Cloudflare
-        if account_config.get("use_g4f", False):
-            return self.generate_image_g4f(prompt)
-        else:
-            worker_url = account_config.get("worker_url")
-            if not worker_url:
-                error("Cloudflare worker URL not configured for this account")
-                return None
-            return self.generate_image_cloudflare(prompt, worker_url)
+                if not video_url:
+                    warning(f"No suitable HD video file found for '{term}'. Skipping.")
+                    continue
+
+                # Download the video
+                video_response = requests.get(video_url)
+                video_response.raise_for_status()
+
+                video_path = os.path.join(ROOT_DIR, ".mp", f"{uuid4()}.mp4")
+                with open(video_path, "wb") as f:
+                    f.write(video_response.content)
+
+                self.video_paths.append(video_path)
+                success(f"Downloaded video for '{term}'.")
+
+            except requests.exceptions.RequestException as e:
+                error(f"Failed to download video for term '{term}': {e}")
+            except Exception as e:
+                error(f"An unexpected error occurred while processing term '{term}': {e}")
+
 
     def generate_script_to_speech(self, tts_instance: TTS) -> str:
         """
@@ -509,41 +409,20 @@ class YouTube:
 
         return srt_path
 
-    def _create_ken_burns_clip(self, image_path: str, duration: float, size: tuple = (1080, 1920), zoom_factor: float = 1.05) -> VideoClip:
-        """
-        Creates a VideoClip with a Ken Burns (zoom-in) effect.
-        """
-
-        img_clip = ImageClip(image_path)
-
-        # Function to generate the zoom effect
-        def resize_func(t):
-            # Zoom from 1.0x to zoom_factor over the duration
-            return 1 + (zoom_factor - 1) * (t / duration)
-
-        # Apply the resize effect
-        zoomed_clip = img_clip.resize(resize_func)
-
-        # Crop from the center to maintain the aspect ratio and position
-        final_clip = crop(zoomed_clip, width=size[0], height=size[1], x_center=zoomed_clip.w / 2, y_center=zoomed_clip.h / 2)
-
-        return final_clip.set_duration(duration)
-
-
     def combine(self) -> str:
         """
-        Combines everything into the final video.
+        Combines the downloaded video clips into the final video.
         """
-        combined_image_path = os.path.join(ROOT_DIR, ".mp", str(uuid4()) + ".mp4")
+        combined_video_path = os.path.join(ROOT_DIR, ".mp", str(uuid4()) + ".mp4")
         threads = get_threads()
         tts_clip = AudioFileClip(self.tts_path)
         max_duration = tts_clip.duration
 
-        if not self.images:
-            error("No images were generated to combine.")
+        if not self.video_paths:
+            error("No videos were downloaded to combine.")
             return None
 
-        req_dur = max_duration / len(self.images)
+        req_dur = max_duration / len(self.video_paths)
 
         # --- Text Subtitles Generator ---
         generator = lambda txt: TextClip(
@@ -557,12 +436,29 @@ class YouTube:
             method="caption",
         )
 
-        print(colored("[+] Combining images with Ken Burns effect...", "blue"))
+        print(colored("[+] Combining downloaded video clips...", "blue"))
 
         clips = []
-        for image_path in self.images:
-            clip = self._create_ken_burns_clip(image_path, req_dur)
-            clips.append(clip)
+        for video_path in self.video_paths:
+            clip = VideoFileClip(video_path)
+
+            # If clip is shorter than required, loop it
+            if clip.duration < req_dur:
+                clip = clip.fx(vfx.loop, duration=req_dur)
+            # If clip is longer, take a random subclip
+            else:
+                start_time = random.uniform(0, clip.duration - req_dur)
+                clip = clip.subclip(start_time, start_time + req_dur)
+
+            # Resize and crop to target 9:16 aspect ratio
+            target_size = (1080, 1920)
+            clip = clip.resize(height=target_size[1])
+            if clip.w < target_size[0]:
+                clip = clip.resize(width=target_size[0])
+
+            clip = crop(clip, width=target_size[0], height=target_size[1], x_center=clip.w/2, y_center=clip.h/2)
+
+            clips.append(clip.set_fps(30))
 
         # --- Video and Audio Concatenation ---
         final_clip = concatenate_videoclips(clips).set_duration(max_duration)
@@ -609,12 +505,11 @@ class YouTube:
         # Generate the Metadata
         self.generate_metadata()
 
-        # Generate the Image Prompts
-        self.generate_prompts()
+        # Generate video search terms
+        self._generate_video_search_terms()
 
-        # Generate the Images
-        for prompt in self.image_prompts:
-            self.generate_image(prompt)
+        # Download videos
+        self._download_videos()
 
         # Generate the TTS
         self.generate_script_to_speech(tts_instance)
